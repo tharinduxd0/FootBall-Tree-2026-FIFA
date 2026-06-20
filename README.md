@@ -23,6 +23,12 @@ A lightweight single-page HTML tracker for the 2026 FIFA World Cup group stage a
 - Uses browser `localStorage` for state persistence
 - Fetches country metadata for flags when available
 
+## Screenshots
+
+![Tracker view 1](https://i.postimg.cc/NM39w4zY/image.png)
+
+![Tracker view 2](https://i.postimg.cc/MK8MP9BZ/image.png)
+
 ## Credit
 
 Created by `tharinduxd`.
