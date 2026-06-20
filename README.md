@@ -9,6 +9,11 @@ A lightweight single-page HTML tracker for the 2026 FIFA World Cup group stage a
 - Live analysis summary with leading teams, struggling teams, and performance metrics
 - Team search and matchup filters
 - Local state persistence for results
+- Live score entry with goals for / against and clean sheet tracking
+- Group sorting by tiebreakers: points, goal difference, goals scored, head-to-head
+- Export standings to CSV and import/export fixtures via JSON
+- Reset all or reset individual group results
+- Match history view showing how group rankings changed over time
 
 ## How to use
 

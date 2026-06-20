@@ -504,8 +504,26 @@
     padding-top:16px;
     border-top:1px solid var(--line);
   }
-  .hint-text{font-size:12px; color:var(--chalk-dim);}
-
+  .top-right{display:flex;flex-wrap:wrap;align-items:center;gap:8px;}
+  .explanation-card, .history-panel{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:16px;
+    margin-bottom:22px;
+  }
+  .explanation-card strong, .history-panel strong{display:block;font-family:var(--font-display);letter-spacing:0.08em;text-transform:uppercase;color:var(--gold-bright);margin-bottom:10px;font-size:13px;}
+  .explanation-card p{color:var(--chalk-dim);font-size:13px;line-height:1.6;margin-bottom:10px;}
+  .history-group{margin-bottom:14px;}
+  .history-group strong{font-family:var(--font-display);font-size:13px;color:var(--gold-bright);display:block;margin-bottom:8px;}
+  .history-group ol{padding-left:18px;color:var(--chalk-dim);font-size:13px;line-height:1.6;}
+  .history-group li{margin-bottom:6px;}
+  .history-meta{color:var(--chalk);font-family:var(--font-mono);font-size:11px;margin-right:6px;}
+  .group-head{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:rgba(255,255,255,0.03);border-bottom:1px solid var(--line);}
+  .group-head .group-actions{display:flex;gap:8px;align-items:center;}
+  .score-controls{display:flex;align-items:center;gap:8px;margin-top:10px;}
+  .score-input{width:58px;padding:6px 8px;border-radius:6px;border:1px solid var(--line);background:var(--card);color:var(--chalk);font-size:13px;text-align:center;}
+  .score-sep{font-family:var(--font-mono);color:var(--chalk-dim);}
   @media (prefers-reduced-motion: reduce){
     *{transition:none !important;}
   }
@@ -521,8 +539,17 @@
     </div>
     <div class="top-right">
       <span class="save-status"><span class="save-dot"></span><span id="saveLabel">Saved</span></span>
+      <button class="btn" id="exportCsvBtn">Export CSV</button>
+      <button class="btn" id="exportJsonBtn">Export JSON</button>
+      <button class="btn" id="importJsonBtn">Import JSON</button>
       <button class="btn danger" id="resetBtn">Reset all</button>
+      <input type="file" id="jsonFileInput" accept="application/json" style="display:none;">
     </div>
+  </div>
+  <div class="explanation-card">
+    <strong>How standings are calculated</strong>
+    <p>Points: 3 for a win, 1 for a draw, 0 for a loss. Tiebreakers use goal difference, goals scored, then head-to-head results among tied teams.</p>
+    <p>Fixtures support score entry, group ordering updates automatically, and the top teams advance into the knockout bracket.</p>
   </div>
   <div class="analysis-summary" id="analysisSummary">
     <div class="summary-card"><strong>Leading teams</strong><div class="summary-empty">No results yet. Add match outcomes to see team form.</div></div>
@@ -557,6 +584,9 @@
       <button class="btn" id="goKnockoutBtn" style="display:none;">View Knockout Bracket →</button>
     </div>
     <div class="groups-grid" id="groupsGrid"></div>
+    <div class="history-panel">
+      <div class="summary-card"><strong>Standings history</strong><div id="historySection">Match-by-match group standings history will appear here as results are entered.</div></div>
+    </div>
   </div>
 
   <div class="view" id="view-knockout">
@@ -698,11 +728,45 @@ function roundRobinPairs(teams){
 
 /* ============== STATE ============== */
 let STATE = {
-  groupResults: {}, // "A_0v1" -> {a:'W'|'D'|'L' relative...} we'll store as {result:'home'|'away'|'draw'}
+  groupResults: {}, // "A_0v1" -> {homeGoals:number, awayGoals:number}
   koResults: {}     // matchId -> winnerCode
 };
 
 const STORAGE_KEY = 'wc2026-bracket-state';
+
+function normalizeGroupResult(entry){
+  if(entry == null) return null;
+  if(typeof entry === 'string'){
+    if(entry === 'home') return {homeGoals:1, awayGoals:0};
+    if(entry === 'away') return {homeGoals:0, awayGoals:1};
+    if(entry === 'draw') return {homeGoals:0, awayGoals:0};
+    try{ return normalizeGroupResult(JSON.parse(entry)); }catch(e){}
+  }
+  if(typeof entry === 'object'){
+    if(typeof entry.homeGoals === 'number' && typeof entry.awayGoals === 'number'){
+      return {homeGoals: Math.max(0, Math.floor(entry.homeGoals)), awayGoals: Math.max(0, Math.floor(entry.awayGoals))};
+    }
+    if(typeof entry.home === 'number' && typeof entry.away === 'number'){
+      return {homeGoals: Math.max(0, Math.floor(entry.home)), awayGoals: Math.max(0, Math.floor(entry.away))};
+    }
+    if(typeof entry.result === 'string'){
+      return normalizeGroupResult(entry.result);
+    }
+  }
+  return null;
+}
+
+function outcomeFromScore(score){
+  if(!score) return null;
+  if(score.homeGoals > score.awayGoals) return 'home';
+  if(score.homeGoals < score.awayGoals) return 'away';
+  return 'draw';
+}
+
+function scoreString(score){
+  if(!score) return '';
+  return `${score.homeGoals}:${score.awayGoals}`;
+}
 
 async function saveState(){
   try{
@@ -730,7 +794,13 @@ async function loadState(){
     }
     if(value){
       const parsed = JSON.parse(value);
-      STATE.groupResults = parsed.groupResults || {};
+      STATE.groupResults = {};
+      if(parsed.groupResults){
+        Object.entries(parsed.groupResults).forEach(([key,val])=>{
+          const normalized = normalizeGroupResult(val);
+          if(normalized){ STATE.groupResults[key] = normalized; }
+        });
+      }
       STATE.koResults = parsed.koResults || {};
     }
   }catch(e){
@@ -755,50 +825,106 @@ function getGroupFixtures(group){
   }));
 }
 
-function computeStandings(group){
+function compareHeadToHead(group, codeA, codeB){
+  const mini = {
+    [codeA]: {pts:0, gf:0, gd:0},
+    [codeB]: {pts:0, gf:0, gd:0}
+  };
+  getGroupFixtures(group).forEach(fx=>{
+    if(![codeA, codeB].includes(fx.home) || ![codeA, codeB].includes(fx.away)) return;
+    const score = normalizeGroupResult(STATE.groupResults[fx.key]);
+    if(!score) return;
+    const home = mini[fx.home], away = mini[fx.away];
+    home.gf += score.homeGoals; away.gf += score.awayGoals;
+    home.gd += score.homeGoals - score.awayGoals;
+    away.gd += score.awayGoals - score.homeGoals;
+    const outcome = outcomeFromScore(score);
+    if(outcome === 'home'){ home.pts += 3; }
+    else if(outcome === 'away'){ away.pts += 3; }
+    else { home.pts += 1; away.pts += 1; }
+  });
+  const a = mini[codeA], b = mini[codeB];
+  if(b.pts !== a.pts) return b.pts - a.pts;
+  if(b.gd !== a.gd) return b.gd - a.gd;
+  if(b.gf !== a.gf) return b.gf - a.gf;
+  return codeA.localeCompare(codeB);
+}
+
+function computeStandingsWithFixtures(group, fixtures){
   const teams = GROUPS_DATA[group].map(([code])=>code);
   const table = {};
-  teams.forEach(c=>{ table[c]={code:c, p:0, w:0, d:0, l:0, pts:0}; });
-  const fixtures = getGroupFixtures(group);
+  teams.forEach(c=>{ table[c] = {code:c, p:0, w:0, d:0, l:0, pts:0, gf:0, ga:0, gd:0, cleanSheets:0, winMargin:0}; });
   fixtures.forEach(fx=>{
-    const res = STATE.groupResults[fx.key];
-    if(!res) return;
+    const score = normalizeGroupResult(STATE.groupResults[fx.key]);
+    if(!score) return;
     const home = table[fx.home], away = table[fx.away];
+    const outcome = outcomeFromScore(score);
     home.p++; away.p++;
-    if(res==='home'){ home.w++; home.pts+=3; away.l++; }
-    else if(res==='away'){ away.w++; away.pts+=3; home.l++; }
-    else if(res==='draw'){ home.d++; away.d++; home.pts+=1; away.pts+=1; }
+    home.gf += score.homeGoals; home.ga += score.awayGoals;
+    away.gf += score.awayGoals; away.ga += score.homeGoals;
+    home.gd = home.gf - home.ga;
+    away.gd = away.gf - away.ga;
+    if(score.awayGoals === 0) home.cleanSheets++;
+    if(score.homeGoals === 0) away.cleanSheets++;
+    const margin = Math.abs(score.homeGoals - score.awayGoals);
+    if(outcome === 'home'){
+      home.w++; home.pts += 3; away.l++; home.winMargin = Math.max(home.winMargin, margin);
+    } else if(outcome === 'away'){
+      away.w++; away.pts += 3; home.l++; away.winMargin = Math.max(away.winMargin, margin);
+    } else {
+      home.d++; away.d++; home.pts += 1; away.pts += 1;
+    }
   });
   const arr = Object.values(table);
-  arr.sort((a,b)=> b.pts - a.pts || (b.w-a.w) || a.code.localeCompare(b.code));
+  arr.sort((a,b)=>{
+    if(b.pts !== a.pts) return b.pts - a.pts;
+    if(b.gd !== a.gd) return b.gd - a.gd;
+    if(b.gf !== a.gf) return b.gf - a.gf;
+    return compareHeadToHead(group, a.code, b.code);
+  });
   return arr;
 }
 
+function computeStandings(group){
+  return computeStandingsWithFixtures(group, getGroupFixtures(group));
+}
+
 function groupComplete(group){
-  return getGroupFixtures(group).every(fx=> !!STATE.groupResults[fx.key]);
+  return getGroupFixtures(group).every(fx=> !!normalizeGroupResult(STATE.groupResults[fx.key]));
 }
 function allGroupsComplete(){
   return GROUP_LETTERS.every(groupComplete);
 }
 function totalGroupMatchesPlayed(){
-  return Object.keys(STATE.groupResults).length;
+  return Object.values(STATE.groupResults).filter(v => normalizeGroupResult(v)).length;
 }
 
 function computeTeamStats(){
   const stats = {};
   GROUP_LETTERS.forEach(group=>{
     GROUPS_DATA[group].forEach(([code])=>{
-      stats[code] = {code, played:0, w:0, d:0, l:0, pts:0};
+      stats[code] = {code, played:0, w:0, d:0, l:0, pts:0, gf:0, ga:0, gd:0, cleanSheets:0, winMargin:0};
     });
     getGroupFixtures(group).forEach(fx=>{
-      const res = STATE.groupResults[fx.key];
-      if(!res) return;
-      const home = stats[fx.home];
-      const away = stats[fx.away];
+      const score = normalizeGroupResult(STATE.groupResults[fx.key]);
+      if(!score) return;
+      const home = stats[fx.home], away = stats[fx.away];
+      const outcome = outcomeFromScore(score);
       home.played++; away.played++;
-      if(res==='home'){ home.w++; home.pts+=3; away.l++; }
-      else if(res==='away'){ away.w++; away.pts+=3; home.l++; }
-      else if(res==='draw'){ home.d++; away.d++; home.pts+=1; away.pts+=1; }
+      home.gf += score.homeGoals; home.ga += score.awayGoals;
+      away.gf += score.awayGoals; away.ga += score.homeGoals;
+      home.gd = home.gf - home.ga;
+      away.gd = away.gf - away.ga;
+      if(score.awayGoals === 0) home.cleanSheets++;
+      if(score.homeGoals === 0) away.cleanSheets++;
+      const margin = Math.abs(score.homeGoals - score.awayGoals);
+      if(outcome === 'home'){
+        home.w++; home.pts += 3; away.l++; home.winMargin = Math.max(home.winMargin, margin);
+      } else if(outcome === 'away'){
+        away.w++; away.pts += 3; home.l++; away.winMargin = Math.max(away.winMargin, margin);
+      } else {
+        home.d++; away.d++; home.pts += 1; away.pts += 1;
+      }
     });
   });
   Object.values(stats).forEach(team=>{ team.winRatio = team.played ? +(team.w / team.played).toFixed(2) : 0; });
@@ -810,15 +936,45 @@ function renderAnalysis(){
   if(!container) return;
   const stats = Object.values(computeTeamStats());
   const playedTeams = stats.filter(t=>t.played > 0);
-  const sortedLeaders = playedTeams.slice().sort((a,b)=> b.winRatio - a.winRatio || b.pts - a.pts || b.played - a.played || a.code.localeCompare(b.code)).slice(0,3);
-  const sortedStrugglers = playedTeams.slice().sort((a,b)=> a.winRatio - b.winRatio || a.pts - b.pts || b.played - a.played || a.code.localeCompare(b.code)).slice(0,3);
-  const bestPoints = playedTeams.slice().sort((a,b)=> b.pts - a.pts || b.winRatio - a.winRatio || a.code.localeCompare(b.code))[0] || null;
-  const mostWins = playedTeams.slice().sort((a,b)=> b.w - a.w || b.pts - a.pts || a.code.localeCompare(b.code))[0] || null;
-  const mostDraws = playedTeams.slice().sort((a,b)=> b.d - a.d || b.played - a.played || a.code.localeCompare(b.code))[0] || null;
-  const mostLosses = playedTeams.slice().sort((a,b)=> b.l - a.l || a.pts - b.pts || a.code.localeCompare(b.code))[0] || null;
-  const mostPlayed = playedTeams.slice().sort((a,b)=> b.played - a.played || b.pts - a.pts || a.code.localeCompare(b.code))[0] || null;
+  const sortedLeaders = playedTeams.slice().sort((a,b)=> b.pts - a.pts || b.winRatio - a.winRatio || b.gd - a.gd || a.code.localeCompare(b.code)).slice(0,3);
+  const sortedStrugglers = playedTeams.slice().sort((a,b)=> a.pts - b.pts || a.winRatio - b.winRatio || a.gd - b.gd || a.code.localeCompare(b.code)).slice(0,3);
+  const bestOffense = [];
+  const bestDefense = [];
+  const mostDraws = [];
+  let biggestWinMatch = null;
+
+  if(playedTeams.length){
+    const maxGf = Math.max(...playedTeams.map(t=>t.gf));
+    const minGa = Math.min(...playedTeams.map(t=>t.ga));
+    const maxD = Math.max(...playedTeams.map(t=>t.d));
+    const maxWinMargin = Math.max(...playedTeams.map(t=>t.winMargin));
+
+    bestOffense.push(...playedTeams.filter(t=> t.gf === maxGf).sort((a,b)=> b.pts - a.pts || a.code.localeCompare(b.code)));
+    bestDefense.push(...playedTeams.filter(t=> t.ga === minGa).sort((a,b)=> b.pts - a.pts || a.code.localeCompare(b.code)));
+    mostDraws.push(...playedTeams.filter(t=> t.d === maxD).sort((a,b)=> b.played - a.played || a.code.localeCompare(b.code)));
+
+    GROUP_LETTERS.forEach(group=>{
+      getGroupFixtures(group).forEach(fx=>{
+        const score = normalizeGroupResult(STATE.groupResults[fx.key]);
+        if(!score) return;
+        const outcome = outcomeFromScore(score);
+        if(outcome === 'draw') return;
+        const margin = Math.abs(score.homeGoals - score.awayGoals);
+        const winner = outcome === 'home' ? fx.home : fx.away;
+        const winnerGoals = outcome === 'home' ? score.homeGoals : score.awayGoals;
+
+        if(!biggestWinMatch
+            || margin > biggestWinMatch.margin
+            || (margin === biggestWinMatch.margin && (winnerGoals > biggestWinMatch.winnerGoals
+              || (winnerGoals === biggestWinMatch.winnerGoals && winner.localeCompare(biggestWinMatch.winner) < 0)))){
+          biggestWinMatch = {winner, margin, winnerGoals};
+        }
+      });
+    });
+  }
+
   const groupProgress = GROUP_LETTERS.map(group=>{
-    const played = getGroupFixtures(group).filter(fx=> !!STATE.groupResults[fx.key]).length;
+    const played = getGroupFixtures(group).filter(fx=> !!normalizeGroupResult(STATE.groupResults[fx.key])).length;
     return {group, played, total:6};
   });
   const bestGroup = groupProgress.slice().sort((a,b)=> b.played - a.played || a.group.localeCompare(b.group))[0];
@@ -834,13 +990,20 @@ function renderAnalysis(){
 
   const leadingHtml = renderTeamRows(sortedLeaders);
   const strugglingHtml = renderTeamRows(sortedStrugglers);
-  const performanceHtml = playedTeams.length ? `
-      <div class="summary-item"><div class="summary-team"><span>Top points</span><span>${bestPoints.code} (${bestPoints.pts})</span></div></div>
-      <div class="summary-item"><div class="summary-team"><span>Most wins</span><span>${mostWins.code} (${mostWins.w})</span></div></div>
-      <div class="summary-item"><div class="summary-team"><span>Most draws</span><span>${mostDraws.code} (${mostDraws.d})</span></div></div>
-      <div class="summary-item"><div class="summary-team"><span>Most losses</span><span>${mostLosses.code} (${mostLosses.l})</span></div></div>
-      <div class="summary-item"><div class="summary-team"><span>Most games played</span><span>${mostPlayed.code} (${mostPlayed.played})</span></div></div>
-    ` : '<div class="summary-empty">No match outcomes entered yet.</div>';
+  const topOffense = bestOffense[0] || null;
+  const topDefense = bestDefense[0] || null;
+  const topDraws = mostDraws[0] || null;
+  const topWin = biggestWinMatch;
+
+  let performanceHtml = '';
+  if(playedTeams.length){
+    performanceHtml += `<div class="summary-item"><div class="summary-team"><span>Best offense</span><span>${topOffense ? topOffense.code : 'TBD'} (${topOffense ? topOffense.gf : 0})</span></div></div>`;
+    performanceHtml += `<div class="summary-item"><div class="summary-team"><span>Best defense</span><span>${topDefense ? topDefense.code : 'TBD'} (${topDefense ? topDefense.ga : 0})</span></div></div>`;
+    performanceHtml += `<div class="summary-item"><div class="summary-team"><span>Most draws</span><span>${topDraws ? topDraws.code : 'TBD'} (${topDraws ? topDraws.d : 0})</span></div></div>`;
+    performanceHtml += `<div class="summary-item"><div class="summary-team"><span>Biggest win</span><span>${topWin ? topWin.winner : 'TBD'} (${topWin ? (topWin.margin > 0 ? '+'+topWin.margin : '0') : '0'})</span></div></div>`;
+  } else {
+    performanceHtml = '<div class="summary-empty">No match outcomes entered yet.</div>';
+  }
   const progressHtml = `<div class="summary-item"><div class="summary-team"><span>Completed groups</span><span>${completedGroups} / ${GROUP_LETTERS.length}</span></div></div>` +
     `<div class="summary-item"><div class="summary-team"><span>Most active group</span><span>Group ${bestGroup.group}</span></div><div class="summary-note">${bestGroup.played} / ${bestGroup.total} matches played</div></div>`;
 
@@ -866,7 +1029,7 @@ function renderGroups(){
 
     const head = document.createElement('div');
     head.className='group-head';
-    head.innerHTML = `<h3>Group ${g}</h3><span class="gstatus">${complete?'Final':'In progress'}</span>`;
+    head.innerHTML = `<div><h3>Group ${g}</h3><span class="gstatus">${complete?'Final':'In progress'}</span></div><div class="group-actions"><button class="btn danger reset-group-btn" data-group="${g}">Reset group</button></div>`;
     card.appendChild(head);
 
     const tableWrap = document.createElement('div');
@@ -879,11 +1042,12 @@ function renderGroups(){
         <td><span class="pos-tag">${idx+1}</span></td>
         <td class="team-col"><img class="flag" src="${t.flagUrl}" alt="${t.countryName || t.code} flag"><span title="${t.fullName || t.code}">${t.code}</span></td>
         <td>${row.p}</td><td>${row.w}</td><td>${row.d}</td><td>${row.l}</td>
+        <td>${row.gf}</td><td>${row.ga}</td><td>${row.gd}</td><td>${row.cleanSheets}</td>
         <td><strong>${row.pts}</strong></td>
       </tr>`;
     });
     tableWrap.innerHTML = `<table class="standings">
-      <thead><tr><th></th><th class="team-col">Team</th><th>P</th><th>W</th><th>D</th><th>L</th><th>Pts</th></tr></thead>
+      <thead><tr><th></th><th class="team-col">Team</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GF</th><th>GA</th><th>GD</th><th>CS</th><th>Pts</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
     card.appendChild(tableWrap);
@@ -893,15 +1057,22 @@ function renderGroups(){
     fixturesWrap.innerHTML = `<div class="fixtures-label">Matches</div>`;
     getGroupFixtures(g).forEach(fx=>{
       const homeT = TEAMS[fx.home], awayT = TEAMS[fx.away];
-      const res = STATE.groupResults[fx.key];
+      const score = normalizeGroupResult(STATE.groupResults[fx.key]);
+      const outcome = outcomeFromScore(score);
       const row = document.createElement('div');
       row.className='fixture-row';
       row.innerHTML = `
         <div class="fixture-team"><img class="flag" src="${homeT.flagUrl}" alt="${homeT.countryName || homeT.code} flag"><span class="name" title="${homeT.fullName || homeT.code}">${homeT.code}</span></div>
         <div class="result-controls">
-          <button class="rbtn ${res==='home'?'sel-win':''}" data-action="home" title="${homeT.fullName || homeT.code} wins">W</button>
-          <button class="rbtn ${res==='draw'?'sel-draw':''}" data-action="draw" title="Draw">D</button>
-          <button class="rbtn ${res==='away'?'sel-win':''}" data-action="away" title="${awayT.fullName || awayT.code} wins">W</button>
+          <button class="rbtn ${outcome==='home'?'sel-win':''}" data-action="home" title="${homeT.fullName || homeT.code} wins">W</button>
+          <button class="rbtn ${outcome==='draw'?'sel-draw':''}" data-action="draw" title="Draw">D</button>
+          <button class="rbtn ${outcome==='away'?'sel-win':''}" data-action="away" title="${awayT.fullName || awayT.code} wins">W</button>
+        </div>
+        <div class="score-controls">
+          <input class="score-input home-score" type="number" min="0" value="${score?score.homeGoals:''}" aria-label="${homeT.code} goals">
+          <span class="score-sep">-</span>
+          <input class="score-input away-score" type="number" min="0" value="${score?score.awayGoals:''}" aria-label="${awayT.code} goals">
+          <button class="btn" data-action="clear" style="padding:6px 10px;font-size:11px;">Clear</button>
         </div>
         <div class="fixture-team right"><span class="name" title="${awayT.fullName || awayT.code}">${awayT.code}</span><img class="flag" src="${awayT.flagUrl}" alt="${awayT.countryName || awayT.code} flag"></div>
       `;
@@ -909,11 +1080,40 @@ function renderGroups(){
       btns[0].addEventListener('click', ()=> setGroupResult(fx.key,'home'));
       btns[1].addEventListener('click', ()=> setGroupResult(fx.key,'draw'));
       btns[2].addEventListener('click', ()=> setGroupResult(fx.key,'away'));
+      const homeInput = row.querySelector('.home-score');
+      const awayInput = row.querySelector('.away-score');
+      [homeInput, awayInput].forEach(input=>{
+        input.addEventListener('change', ()=>{
+          const homeVal = homeInput.value === '' ? null : parseInt(homeInput.value,10);
+          const awayVal = awayInput.value === '' ? null : parseInt(awayInput.value,10);
+          if(homeVal == null || awayVal == null){ 
+            delete STATE.groupResults[fx.key]; 
+          } else {
+            STATE.groupResults[fx.key] = {homeGoals: Math.max(0, Math.floor(homeVal)), awayGoals: Math.max(0, Math.floor(awayVal))};
+          }
+          saveState();
+          const score = normalizeGroupResult(STATE.groupResults[fx.key]);
+          const outcome = outcomeFromScore(score);
+          const btns = row.querySelectorAll('.rbtn');
+          btns[0].classList.toggle('sel-win', outcome === 'home');
+          btns[1].classList.toggle('sel-draw', outcome === 'draw');
+          btns[2].classList.toggle('sel-win', outcome === 'away');
+          renderGroups();
+          renderKnockout();
+          refreshActiveResults();
+        });
+      });
+      const clearBtn = row.querySelector('[data-action="clear"]');
+      clearBtn.addEventListener('click', ()=>{ delete STATE.groupResults[fx.key]; saveState(); renderGroups(); renderKnockout(); refreshActiveResults(); });
       fixturesWrap.appendChild(row);
     });
     card.appendChild(fixturesWrap);
 
     grid.appendChild(card);
+  });
+
+  grid.querySelectorAll('.reset-group-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=> resetGroup(btn.dataset.group));
   });
 
   // progress banner
@@ -923,18 +1123,73 @@ function renderGroups(){
   document.getElementById('groupProgressFill').style.width = (played/total*100)+'%';
   document.getElementById('goKnockoutBtn').style.display = allGroupsComplete() ? 'inline-block' : 'none';
   document.getElementById('groupCount').textContent = `${played}/${total}`;
+  renderHistoryView();
 }
 
-function setGroupResult(key, result){
-  if(STATE.groupResults[key]===result){
-    delete STATE.groupResults[key]; // toggle off
-  }else{
-    STATE.groupResults[key]=result;
+function setFixtureScore(key, homeGoals, awayGoals){
+  if(homeGoals == null || awayGoals == null || !Number.isFinite(homeGoals) || !Number.isFinite(awayGoals)){
+    delete STATE.groupResults[key];
+  } else {
+    STATE.groupResults[key] = {homeGoals: Math.max(0, Math.floor(homeGoals)), awayGoals: Math.max(0, Math.floor(awayGoals))};
   }
   saveState();
   renderGroups();
   renderKnockout();
   refreshActiveResults();
+}
+
+function setGroupResult(key, result){
+  if(typeof result === 'string'){
+    const current = normalizeGroupResult(STATE.groupResults[key]);
+    if(current && outcomeFromScore(current) === result){
+      delete STATE.groupResults[key];
+    } else {
+      STATE.groupResults[key] = normalizeGroupResult(result);
+    }
+  } else if(typeof result === 'object'){
+    setFixtureScore(key, result.homeGoals, result.awayGoals);
+    return;
+  }
+  saveState();
+  renderGroups();
+  renderKnockout();
+  refreshActiveResults();
+}
+
+function resetGroup(group){
+  getGroupFixtures(group).forEach(fx=> delete STATE.groupResults[fx.key]);
+  saveState();
+  renderGroups();
+  renderKnockout();
+  refreshActiveResults();
+}
+
+function getGroupStandingsHistory(group){
+  const fixtures = getGroupFixtures(group);
+  const history = [];
+  fixtures.forEach((fx, idx)=>{
+    const score = normalizeGroupResult(STATE.groupResults[fx.key]);
+    if(!score) return;
+    const snapshot = computeStandingsWithFixtures(group, fixtures.slice(0, idx+1));
+    history.push({pair:`${fx.home} vs ${fx.away}`, positions: snapshot.map(r=>r.code), played: idx+1});
+  });
+  return history;
+}
+
+function renderHistoryView(){
+  const container = document.getElementById('historySection');
+  if(!container) return;
+  const blocks = GROUP_LETTERS.map(group=>{
+    const history = getGroupStandingsHistory(group);
+    if(history.length === 0){
+      return `<div class="history-group"><strong>Group ${group}</strong><div class="history-empty">No fixtures scored yet.</div></div>`;
+    }
+    const rows = history.map(entry=>{
+      return `<li><span class="history-meta">After ${entry.played} result${entry.played===1?'':'s'} (${entry.pair})</span>${entry.positions.join(' → ')}</li>`;
+    }).join('');
+    return `<div class="history-group"><strong>Group ${group}</strong><ol>${rows}</ol></div>`;
+  }).join('');
+  container.innerHTML = blocks;
 }
 
 function setKoWinner(matchId, code){
@@ -1169,6 +1424,69 @@ function setupTabs(){
   });
 }
 
+function downloadText(filename, text){
+  const blob = new Blob([text], {type:'application/octet-stream'});
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(link.href);
+}
+
+function exportStateJSON(){
+  downloadText('wc2026-state.json', JSON.stringify({groupResults: STATE.groupResults, koResults: STATE.koResults}, null, 2));
+}
+
+function exportStandingsCSV(){
+  const rows = ['Group,Position,Team,P,W,D,L,GF,GA,GD,CS,Pts'];
+  GROUP_LETTERS.forEach(group=>{
+    computeStandings(group).forEach((row, idx)=>{
+      rows.push([group, idx+1, row.code, row.p, row.w, row.d, row.l, row.gf, row.ga, row.gd, row.cleanSheets, row.pts].join(','));
+    });
+  });
+  downloadText('wc2026-standings.csv', rows.join('\n'));
+}
+
+function importStateJSON(file){
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = event => {
+    try{
+      const parsed = JSON.parse(event.target.result);
+      STATE.groupResults = {};
+      if(parsed.groupResults){
+        Object.entries(parsed.groupResults).forEach(([key,val])=>{
+          const normalized = normalizeGroupResult(val);
+          if(normalized){ STATE.groupResults[key] = normalized; }
+        });
+      }
+      STATE.koResults = parsed.koResults || {};
+      saveState();
+      renderGroups();
+      renderKnockout();
+      refreshActiveResults();
+    }catch(e){
+      alert('Imported JSON is not valid.');
+    }
+  };
+  reader.readAsText(file);
+}
+
+function setupExportImport(){
+  document.getElementById('exportCsvBtn').addEventListener('click', exportStandingsCSV);
+  document.getElementById('exportJsonBtn').addEventListener('click', exportStateJSON);
+  document.getElementById('importJsonBtn').addEventListener('click', ()=>{
+    document.getElementById('jsonFileInput').click();
+  });
+  document.getElementById('jsonFileInput').addEventListener('change', event=>{
+    const file = event.target.files && event.target.files[0];
+    importStateJSON(file);
+    event.target.value = '';
+  });
+}
+
 /* ============== RESET ============== */
 function setupReset(){
   document.getElementById('resetBtn').addEventListener('click', async ()=>{
@@ -1277,15 +1595,22 @@ function renderSearchResults(results, query){
       const row = document.createElement('div');
       row.className='fixture-row';
       const homeT = TEAMS[r.home], awayT = TEAMS[r.away];
-      const resState = STATE.groupResults[r.key];
+      const normalized = normalizeGroupResult(STATE.groupResults[r.key]);
+      const outcome = outcomeFromScore(normalized);
       const homeLabel = (homeT && (homeT.countryName || DISPLAY_NAMES[homeT.code] || homeT.fullName)) || homeT.code;
       const awayLabel = (awayT && (awayT.countryName || DISPLAY_NAMES[awayT.code] || awayT.fullName)) || awayT.code;
       row.innerHTML = `
         <div class="fixture-team"><img class="flag" src="${homeT.flagUrl}" alt="${homeLabel} flag"><span class="name" title="${homeLabel}">${homeLabel}</span></div>
         <div class="result-controls">
-          <button class="rbtn ${resState==='home'?'sel-win':''}" data-action="home">W</button>
-          <button class="rbtn ${resState==='draw'?'sel-draw':''}" data-action="draw">D</button>
-          <button class="rbtn ${resState==='away'?'sel-win':''}" data-action="away">W</button>
+          <button class="rbtn ${outcome==='home'?'sel-win':''}" data-action="home">W</button>
+          <button class="rbtn ${outcome==='draw'?'sel-draw':''}" data-action="draw">D</button>
+          <button class="rbtn ${outcome==='away'?'sel-win':''}" data-action="away">W</button>
+        </div>
+        <div class="score-controls">
+          <input class="score-input home-score" type="number" min="0" value="${normalized?normalized.homeGoals:''}" aria-label="${homeT.code} goals">
+          <span class="score-sep">-</span>
+          <input class="score-input away-score" type="number" min="0" value="${normalized?normalized.awayGoals:''}" aria-label="${awayT.code} goals">
+          <button class="btn" data-action="clear" style="padding:6px 10px;font-size:11px;">Clear</button>
         </div>
         <div class="fixture-team right"><span class="name" title="${awayLabel}">${awayLabel}</span><img class="flag" src="${awayT.flagUrl}" alt="${awayLabel} flag"></div>
       `;
@@ -1293,6 +1618,31 @@ function renderSearchResults(results, query){
       btns[0].addEventListener('click', ()=> setGroupResult(r.key,'home'));
       btns[1].addEventListener('click', ()=> setGroupResult(r.key,'draw'));
       btns[2].addEventListener('click', ()=> setGroupResult(r.key,'away'));
+      const homeInput = row.querySelector('.home-score');
+      const awayInput = row.querySelector('.away-score');
+      [homeInput, awayInput].forEach(input=>{
+        input.addEventListener('change', ()=>{
+          const homeVal = homeInput.value === '' ? null : parseInt(homeInput.value,10);
+          const awayVal = awayInput.value === '' ? null : parseInt(awayInput.value,10);
+          if(homeVal == null || awayVal == null){ 
+            delete STATE.groupResults[r.key]; 
+          } else {
+            STATE.groupResults[r.key] = {homeGoals: Math.max(0, Math.floor(homeVal)), awayGoals: Math.max(0, Math.floor(awayVal))};
+          }
+          saveState();
+          const score = normalizeGroupResult(STATE.groupResults[r.key]);
+          const outcome = outcomeFromScore(score);
+          const btns = row.querySelectorAll('.rbtn');
+          btns[0].classList.toggle('sel-win', outcome === 'home');
+          btns[1].classList.toggle('sel-draw', outcome === 'draw');
+          btns[2].classList.toggle('sel-win', outcome === 'away');
+          renderGroups();
+          renderKnockout();
+          renderAnalysis();
+        });
+      });
+      const clearBtn = row.querySelector('[data-action="clear"]');
+      clearBtn.addEventListener('click', ()=>{ delete STATE.groupResults[r.key]; saveState(); renderGroups(); renderKnockout(); renderAnalysis(); });
       const meta = document.createElement('div'); meta.style.fontSize='11px'; meta.style.color='var(--chalk-dim)'; meta.style.padding='6px 0'; meta.textContent = 'Group ' + r.group;
       container.appendChild(row);
       container.appendChild(meta);
@@ -1342,15 +1692,22 @@ function renderPairMatches(a,b){
     const row = document.createElement('div'); row.className='fixture-row';
     if(m.type==='group'){
       const homeT = TEAMS[m.home], awayT = TEAMS[m.away];
-      const resState = STATE.groupResults[m.key];
+      const normalized = normalizeGroupResult(STATE.groupResults[m.key]);
+      const outcome = outcomeFromScore(normalized);
       const homeLabel = (homeT && (homeT.countryName || DISPLAY_NAMES[homeT.code] || homeT.fullName)) || homeT.code;
       const awayLabel = (awayT && (awayT.countryName || DISPLAY_NAMES[awayT.code] || awayT.fullName)) || awayT.code;
       row.innerHTML = `
         <div class="fixture-team"><img class="flag" src="${homeT.flagUrl}"><span class="name">${homeLabel} (${homeT.code})</span></div>
         <div class="result-controls">
-          <button class="rbtn ${resState==='home'?'sel-win':''}">W</button>
-          <button class="rbtn ${resState==='draw'?'sel-draw':''}">D</button>
-          <button class="rbtn ${resState==='away'?'sel-win':''}">W</button>
+          <button class="rbtn ${outcome==='home'?'sel-win':''}">W</button>
+          <button class="rbtn ${outcome==='draw'?'sel-draw':''}">D</button>
+          <button class="rbtn ${outcome==='away'?'sel-win':''}">W</button>
+        </div>
+        <div class="score-controls">
+          <input class="score-input home-score" type="number" min="0" value="${normalized?normalized.homeGoals:''}" aria-label="${homeT.code} goals">
+          <span class="score-sep">-</span>
+          <input class="score-input away-score" type="number" min="0" value="${normalized?normalized.awayGoals:''}" aria-label="${awayT.code} goals">
+          <button class="btn" data-action="clear" style="padding:6px 10px;font-size:11px;">Clear</button>
         </div>
         <div class="fixture-team right"><span class="name">${awayLabel} (${awayT.code})</span><img class="flag" src="${awayT.flagUrl}"></div>
       `;
@@ -1358,6 +1715,31 @@ function renderPairMatches(a,b){
       btns[0].addEventListener('click', ()=> setGroupResult(m.key,'home'));
       btns[1].addEventListener('click', ()=> setGroupResult(m.key,'draw'));
       btns[2].addEventListener('click', ()=> setGroupResult(m.key,'away'));
+      const homeInput = row.querySelector('.home-score');
+      const awayInput = row.querySelector('.away-score');
+      [homeInput, awayInput].forEach(input=>{
+        input.addEventListener('change', ()=>{
+          const homeVal = homeInput.value === '' ? null : parseInt(homeInput.value,10);
+          const awayVal = awayInput.value === '' ? null : parseInt(awayInput.value,10);
+          if(homeVal == null || awayVal == null){ 
+            delete STATE.groupResults[m.key]; 
+          } else {
+            STATE.groupResults[m.key] = {homeGoals: Math.max(0, Math.floor(homeVal)), awayGoals: Math.max(0, Math.floor(awayVal))};
+          }
+          saveState();
+          const score = normalizeGroupResult(STATE.groupResults[m.key]);
+          const outcome = outcomeFromScore(score);
+          const btns = row.querySelectorAll('.rbtn');
+          btns[0].classList.toggle('sel-win', outcome === 'home');
+          btns[1].classList.toggle('sel-draw', outcome === 'draw');
+          btns[2].classList.toggle('sel-win', outcome === 'away');
+          renderGroups();
+          renderKnockout();
+          renderAnalysis();
+        });
+      });
+      const clearBtn = row.querySelector('[data-action="clear"]');
+      clearBtn.addEventListener('click', ()=>{ delete STATE.groupResults[m.key]; saveState(); renderGroups(); renderKnockout(); renderAnalysis(); });
       const meta = document.createElement('div'); meta.style.fontSize='11px'; meta.style.color='var(--chalk-dim)'; meta.style.padding='6px 0'; meta.textContent = 'Group ' + m.group;
       container.appendChild(row); container.appendChild(meta);
     } else {
@@ -1446,6 +1828,7 @@ async function init(){
   await loadCountryMetadata();
   setupTabs();
   setupReset();
+  setupExportImport();
   setupSearch();
   renderGroups();
   renderKnockout();
