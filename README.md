@@ -13,7 +13,6 @@ A lightweight single-page HTML tracker for the 2026 FIFA World Cup group stage a
 - Group sorting by tiebreakers: points, goal difference, goals scored, head-to-head
 - Export standings to CSV and import/export fixtures via JSON
 - Reset all or reset individual group results
-- Match history view showing how group rankings changed over time
 
 ## How to use
 
@@ -21,6 +20,10 @@ A lightweight single-page HTML tracker for the 2026 FIFA World Cup group stage a
 2. Use the group stage fixtures to record wins, draws, and losses.
 3. The summary cards at the top update automatically.
 4. When all groups are complete, the knockout bracket becomes active.
+
+## Live Demo
+
+- https://tharinduxd0.github.io/FootBall-Tree-2026-FIFA/
 
 ## Tech
 

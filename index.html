@@ -505,20 +505,15 @@
     border-top:1px solid var(--line);
   }
   .top-right{display:flex;flex-wrap:wrap;align-items:center;gap:8px;}
-  .explanation-card, .history-panel{
+  .explanation-card{
     background:var(--card);
     border:1px solid var(--line);
     border-radius:10px;
     padding:16px;
     margin-bottom:22px;
   }
-  .explanation-card strong, .history-panel strong{display:block;font-family:var(--font-display);letter-spacing:0.08em;text-transform:uppercase;color:var(--gold-bright);margin-bottom:10px;font-size:13px;}
+  .explanation-card strong{display:block;font-family:var(--font-display);letter-spacing:0.08em;text-transform:uppercase;color:var(--gold-bright);margin-bottom:10px;font-size:13px;}
   .explanation-card p{color:var(--chalk-dim);font-size:13px;line-height:1.6;margin-bottom:10px;}
-  .history-group{margin-bottom:14px;}
-  .history-group strong{font-family:var(--font-display);font-size:13px;color:var(--gold-bright);display:block;margin-bottom:8px;}
-  .history-group ol{padding-left:18px;color:var(--chalk-dim);font-size:13px;line-height:1.6;}
-  .history-group li{margin-bottom:6px;}
-  .history-meta{color:var(--chalk);font-family:var(--font-mono);font-size:11px;margin-right:6px;}
   .group-head{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:rgba(255,255,255,0.03);border-bottom:1px solid var(--line);}
   .group-head .group-actions{display:flex;gap:8px;align-items:center;}
   .score-controls{display:flex;align-items:center;gap:8px;margin-top:10px;}
@@ -584,9 +579,6 @@
       <button class="btn" id="goKnockoutBtn" style="display:none;">View Knockout Bracket →</button>
     </div>
     <div class="groups-grid" id="groupsGrid"></div>
-    <div class="history-panel">
-      <div class="summary-card"><strong>Standings history</strong><div id="historySection">Match-by-match group standings history will appear here as results are entered.</div></div>
-    </div>
   </div>
 
   <div class="view" id="view-knockout">
@@ -1123,7 +1115,6 @@ function renderGroups(){
   document.getElementById('groupProgressFill').style.width = (played/total*100)+'%';
   document.getElementById('goKnockoutBtn').style.display = allGroupsComplete() ? 'inline-block' : 'none';
   document.getElementById('groupCount').textContent = `${played}/${total}`;
-  renderHistoryView();
 }
 
 function setFixtureScore(key, homeGoals, awayGoals){
@@ -1162,34 +1153,6 @@ function resetGroup(group){
   renderGroups();
   renderKnockout();
   refreshActiveResults();
-}
-
-function getGroupStandingsHistory(group){
-  const fixtures = getGroupFixtures(group);
-  const history = [];
-  fixtures.forEach((fx, idx)=>{
-    const score = normalizeGroupResult(STATE.groupResults[fx.key]);
-    if(!score) return;
-    const snapshot = computeStandingsWithFixtures(group, fixtures.slice(0, idx+1));
-    history.push({pair:`${fx.home} vs ${fx.away}`, positions: snapshot.map(r=>r.code), played: idx+1});
-  });
-  return history;
-}
-
-function renderHistoryView(){
-  const container = document.getElementById('historySection');
-  if(!container) return;
-  const blocks = GROUP_LETTERS.map(group=>{
-    const history = getGroupStandingsHistory(group);
-    if(history.length === 0){
-      return `<div class="history-group"><strong>Group ${group}</strong><div class="history-empty">No fixtures scored yet.</div></div>`;
-    }
-    const rows = history.map(entry=>{
-      return `<li><span class="history-meta">After ${entry.played} result${entry.played===1?'':'s'} (${entry.pair})</span>${entry.positions.join(' → ')}</li>`;
-    }).join('');
-    return `<div class="history-group"><strong>Group ${group}</strong><ol>${rows}</ol></div>`;
-  }).join('');
-  container.innerHTML = blocks;
 }
 
 function setKoWinner(matchId, code){
