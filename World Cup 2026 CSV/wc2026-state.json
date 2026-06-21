@@ -1,0 +1,141 @@
+{
+  "groupResults": {
+    "A_0v1": {
+      "homeGoals": 2,
+      "awayGoals": 0
+    },
+    "A_2v3": {
+      "homeGoals": 2,
+      "awayGoals": 1
+    },
+    "A_1v3": {
+      "homeGoals": 1,
+      "awayGoals": 1
+    },
+    "A_0v2": {
+      "homeGoals": 1,
+      "awayGoals": 0
+    },
+    "B_0v1": {
+      "homeGoals": 1,
+      "awayGoals": 1
+    },
+    "B_2v3": {
+      "homeGoals": 1,
+      "awayGoals": 1
+    },
+    "B_1v3": {
+      "homeGoals": 1,
+      "awayGoals": 5
+    },
+    "B_0v2": {
+      "homeGoals": 6,
+      "awayGoals": 0
+    },
+    "C_0v1": {
+      "homeGoals": 1,
+      "awayGoals": 1
+    },
+    "C_2v3": {
+      "homeGoals": 0,
+      "awayGoals": 1
+    },
+    "D_0v1": {
+      "homeGoals": 4,
+      "awayGoals": 1
+    },
+    "D_2v3": {
+      "homeGoals": 2,
+      "awayGoals": 0
+    },
+    "D_0v2": {
+      "homeGoals": 2,
+      "awayGoals": 0
+    },
+    "E_0v1": {
+      "homeGoals": 7,
+      "awayGoals": 1
+    },
+    "E_1v3": {
+      "homeGoals": 0,
+      "awayGoals": 0
+    },
+    "F_0v1": {
+      "homeGoals": 2,
+      "awayGoals": 2
+    },
+    "F_2v3": {
+      "homeGoals": 5,
+      "awayGoals": 1
+    },
+    "G_0v1": {
+      "homeGoals": 1,
+      "awayGoals": 1
+    },
+    "G_2v3": {
+      "homeGoals": 2,
+      "awayGoals": 2
+    },
+    "H_0v1": {
+      "homeGoals": 0,
+      "awayGoals": 0
+    },
+    "H_2v3": {
+      "homeGoals": 1,
+      "awayGoals": 1
+    },
+    "I_0v1": {
+      "homeGoals": 3,
+      "awayGoals": 1
+    },
+    "I_2v3": {
+      "homeGoals": 1,
+      "awayGoals": 4
+    },
+    "J_0v1": {
+      "homeGoals": 3,
+      "awayGoals": 0
+    },
+    "J_2v3": {
+      "homeGoals": 3,
+      "awayGoals": 1
+    },
+    "K_0v1": {
+      "homeGoals": 1,
+      "awayGoals": 1
+    },
+    "K_2v3": {
+      "homeGoals": 1,
+      "awayGoals": 3
+    },
+    "L_0v1": {
+      "homeGoals": 4,
+      "awayGoals": 2
+    },
+    "L_2v3": {
+      "homeGoals": 1,
+      "awayGoals": 0
+    },
+    "C_1v3": {
+      "homeGoals": 1,
+      "awayGoals": 0
+    },
+    "C_0v2": {
+      "homeGoals": 3,
+      "awayGoals": 0
+    },
+    "D_1v3": {
+      "homeGoals": 1,
+      "awayGoals": 0
+    },
+    "F_0v2": {
+      "homeGoals": 5,
+      "awayGoals": 1
+    },
+    "E_0v2": {
+      "homeGoals": 2,
+      "awayGoals": 1
+    }
+  },
+  "koResults": {}
+}
