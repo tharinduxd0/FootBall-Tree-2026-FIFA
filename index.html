@@ -536,11 +536,6 @@
     </div>
     <div class="top-right">
       <span class="save-status"><span class="save-dot"></span><span id="saveLabel">Saved</span></span>
-      <a class="btn" id="downloadLatestBtn" href="https://drive.google.com/drive/folders/1woEecOAfzXXFWY0tFDUulLKM-gbUckZ8?usp=sharing" target="_blank" rel="noopener">Download latest CSV</a>
-      <button class="btn" id="exportCsvBtn">Export CSV</button>
-      <button class="btn" id="exportJsonBtn">Export JSON</button>
-      <button class="btn" id="importJsonBtn">Import JSON</button>
-      <button class="btn danger" id="resetBtn">Reset all</button>
       <input type="file" id="jsonFileInput" accept="application/json" style="display:none;">
     </div>
   </div>
@@ -1474,21 +1469,35 @@ function importStateJSON(file){
 }
 
 function setupExportImport(){
-  document.getElementById('exportCsvBtn').addEventListener('click', exportStandingsCSV);
-  document.getElementById('exportJsonBtn').addEventListener('click', exportStateJSON);
-  document.getElementById('importJsonBtn').addEventListener('click', ()=>{
-    document.getElementById('jsonFileInput').click();
-  });
-  document.getElementById('jsonFileInput').addEventListener('change', event=>{
-    const file = event.target.files && event.target.files[0];
-    importStateJSON(file);
-    event.target.value = '';
-  });
+  const exportCsvBtn = document.getElementById('exportCsvBtn');
+  if(exportCsvBtn){
+    exportCsvBtn.addEventListener('click', exportStandingsCSV);
+  }
+  const exportJsonBtn = document.getElementById('exportJsonBtn');
+  if(exportJsonBtn){
+    exportJsonBtn.addEventListener('click', exportStateJSON);
+  }
+  const importJsonBtn = document.getElementById('importJsonBtn');
+  const jsonFileInput = document.getElementById('jsonFileInput');
+  if(importJsonBtn && jsonFileInput){
+    importJsonBtn.addEventListener('click', ()=>{
+      jsonFileInput.click();
+    });
+  }
+  if(jsonFileInput){
+    jsonFileInput.addEventListener('change', event=>{
+      const file = event.target.files && event.target.files[0];
+      importStateJSON(file);
+      event.target.value = '';
+    });
+  }
 }
 
 /* ============== RESET ============== */
 function setupReset(){
-  document.getElementById('resetBtn').addEventListener('click', async ()=>{
+  const resetBtn = document.getElementById('resetBtn');
+  if(!resetBtn) return;
+  resetBtn.addEventListener('click', async ()=>{
     if(!confirm('Reset all match results and start over? This cannot be undone.')) return;
     STATE.groupResults = {};
     STATE.koResults = {};
