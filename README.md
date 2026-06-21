@@ -29,7 +29,7 @@ A lightweight single-page HTML tracker for the 2026 FIFA World Cup group stage a
 - The site now loads its public match state from `data/repo-state.json`.
 - Update that JSON file in the repository when you want everyone to see new results.
 - Visitors can view the page and local changes in their browser, but only repo updates are shared.
-## Live Demo
+## Live Web
 
 - https://tharinduxd0.github.io/FootBall-Tree-2026-FIFA/
 
