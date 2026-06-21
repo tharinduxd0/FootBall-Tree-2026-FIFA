@@ -8,11 +8,10 @@ A lightweight single-page HTML tracker for the 2026 FIFA World Cup group stage a
 - Automatic group progress and knockout bracket preview
 - Live analysis summary with leading teams, struggling teams, and performance metrics
 - Team search and matchup filters
-- Local state persistence for results
 - Live score entry with goals for / against and clean sheet tracking
 - Group sorting by tiebreakers: points, goal difference, goals scored, head-to-head
-- Export standings to CSV and import/export fixtures via JSON
 - Reset all or reset individual group results
+- Loads match data from repository JSON file
 
 ## How to use
 
@@ -21,13 +20,10 @@ A lightweight single-page HTML tracker for the 2026 FIFA World Cup group stage a
 3. The summary cards at the top update automatically.
 4. When all groups are complete, the knockout bracket becomes active.
 
-## Import latest data
+## Data
 
-- Latest CSV/JSON data files are available in this Google Drive folder:
-  https://drive.google.com/drive/folders/1woEecOAfzXXFWY0tFDUulLKM-gbUckZ8?usp=sharing
-- Download the most recent file from the folder.
-- Open the application and go to the `Import JSON` section.
-- Upload the downloaded file to load the latest data automatically.
+- The application loads match data from the repository's `data/repo-state.json` file.
+
 ## Shared repo data
 
 - The site now loads its public match state from `data/repo-state.json`.
