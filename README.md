@@ -28,7 +28,11 @@ A lightweight single-page HTML tracker for the 2026 FIFA World Cup group stage a
 - Download the most recent file from the folder.
 - Open the application and go to the `Import JSON` section.
 - Upload the downloaded file to load the latest data automatically.
+## Shared repo data
 
+- The site now loads its public match state from `data/repo-state.json`.
+- Update that JSON file in the repository when you want everyone to see new results.
+- Visitors can view the page and local changes in their browser, but only repo updates are shared.
 ## Live Demo
 
 - https://tharinduxd0.github.io/FootBall-Tree-2026-FIFA/

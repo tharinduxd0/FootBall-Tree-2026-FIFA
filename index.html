@@ -548,7 +548,7 @@
     <strong>How standings are calculated</strong>
     <p>Points: 3 for a win, 1 for a draw, 0 for a loss. Tiebreakers use goal difference, goals scored, then head-to-head results among tied teams.</p>
     <p>Fixtures support score entry, group ordering updates automatically, and the top teams advance into the knockout bracket.</p>
-    <p>Need the latest data? Click the "Download latest CSV" button above to open the Google Drive folder, then import the downloaded file using the "Import JSON" button.</p>
+    <p>This page loads its initial results from the shared repo state file at <code>data/repo-state.json</code>. Only the site owner updates that file in GitHub; public visitors can view the latest published results.</p>
   </div>
   <div class="analysis-summary" id="analysisSummary">
     <div class="summary-card"><strong>Leading teams</strong><div class="summary-empty">No results yet. Add match outcomes to see team form.</div></div>
@@ -729,6 +729,37 @@ let STATE = {
 };
 
 const STORAGE_KEY = 'wc2026-bracket-state';
+const SHARED_STATE_URL = './data/repo-state.json';
+let SHARED_STATE = {groupResults:{}, koResults:{}};
+
+async function loadSharedState(){
+  try{
+    const response = await fetch(SHARED_STATE_URL, {cache:'reload'});
+    if(!response.ok) throw new Error('shared state file not found');
+    const parsed = await response.json();
+    if(parsed && typeof parsed === 'object'){
+      if(parsed.groupResults && typeof parsed.groupResults === 'object'){
+        SHARED_STATE.groupResults = parsed.groupResults;
+      }
+      if(parsed.koResults && typeof parsed.koResults === 'object'){
+        SHARED_STATE.koResults = parsed.koResults;
+      }
+    }
+
+    STATE.groupResults = {};
+    Object.entries(SHARED_STATE.groupResults).forEach(([key,val]) => {
+      const normalized = normalizeGroupResult(val);
+      if(normalized){ STATE.groupResults[key] = normalized; }
+    });
+    STATE.koResults = SHARED_STATE.koResults || {};
+    const lbl = document.getElementById('saveLabel');
+    if(lbl) lbl.textContent = 'Loaded shared repo data';
+  }catch(e){
+    console.warn('Shared state load failed', e);
+    const lbl = document.getElementById('saveLabel');
+    if(lbl) lbl.textContent = 'Using local state';
+  }
+}
 
 function normalizeGroupResult(entry){
   if(entry == null) return null;
@@ -790,14 +821,15 @@ async function loadState(){
     }
     if(value){
       const parsed = JSON.parse(value);
-      STATE.groupResults = {};
       if(parsed.groupResults){
         Object.entries(parsed.groupResults).forEach(([key,val])=>{
           const normalized = normalizeGroupResult(val);
           if(normalized){ STATE.groupResults[key] = normalized; }
         });
       }
-      STATE.koResults = parsed.koResults || {};
+      if(parsed.koResults && typeof parsed.koResults === 'object'){
+        STATE.koResults = parsed.koResults;
+      }
     }
   }catch(e){
     console.error('load failed', e);
@@ -1791,8 +1823,9 @@ function setupSearch(){
 
 /* ============== INIT ============== */
 async function init(){
-  await loadState();
   await loadCountryMetadata();
+  await loadSharedState();
+  await loadState();
   setupTabs();
   setupReset();
   setupExportImport();
