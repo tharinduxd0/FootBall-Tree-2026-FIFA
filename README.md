@@ -21,6 +21,14 @@ A lightweight single-page HTML tracker for the 2026 FIFA World Cup group stage a
 3. The summary cards at the top update automatically.
 4. When all groups are complete, the knockout bracket becomes active.
 
+## Import latest data
+
+- Latest CSV/JSON data files are available in this Google Drive folder:
+  https://drive.google.com/drive/folders/1woEecOAfzXXFWY0tFDUulLKM-gbUckZ8?usp=sharing
+- Download the most recent file from the folder.
+- Open the application and go to the `Import JSON` section.
+- Upload the downloaded file to load the latest data automatically.
+
 ## Live Demo
 
 - https://tharinduxd0.github.io/FootBall-Tree-2026-FIFA/
