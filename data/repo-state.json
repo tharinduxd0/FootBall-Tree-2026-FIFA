@@ -139,6 +139,14 @@
     "F_1v3": {
       "homeGoals": 4,
       "awayGoals": 0
+    },
+    "H_0v2": {
+      "homeGoals": 4,
+      "awayGoals": 0
+    },
+    "G_0v2": {
+      "homeGoals": 0,
+      "awayGoals": 0
     }
   },
   "koResults": {}
