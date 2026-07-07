@@ -36,7 +36,8 @@
       radial-gradient(ellipse at top, var(--pitch-dark) 0%, var(--pitch-deep) 70%);
   }
   .wrap{
-    max-width:1180px;
+    max-width:1800px;
+    width:min(100%,1800px);
     margin:0 auto;
     padding:28px 20px 80px;
   }
@@ -380,22 +381,41 @@
 
   /* KNOCKOUT TREE */
   .bracket-scroll{
-    overflow-x:auto;
+    overflow-x:hidden;
     padding-bottom:20px;
   }
   .bracket{
     display:flex;
-    gap:46px;
-    min-width:1100px;
-    padding:10px 4px 30px;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:18px;
+    width:100%;
+    padding:18px 4px 30px;
     position:relative;
   }
   .round-col{
     display:flex;
     flex-direction:column;
-    justify-content:space-around;
-    gap:14px;
-    min-width:190px;
+    justify-content:flex-start;
+    gap:10px;
+    min-width:120px;
+    max-width:140px;
+  }
+  .final-col{
+    display:flex;
+    flex-direction:column;
+    align-items:stretch;
+    justify-content:flex-start;
+    min-width:220px;
+    max-width:240px;
+    gap:16px;
+    padding:10px 0;
+  }
+  .final-col .round-title{
+    text-align:center;
+  }
+  .final-col .trophy-card{
+    width:100%;
   }
   .round-title{
     font-family:var(--font-display);
@@ -1196,48 +1216,28 @@ function setKoWinner(matchId, code){
 }
 
 /* ============== KNOCKOUT BRACKET STRUCTURE ============== */
-// Build Round of 32 pairings for 12 groups of 4 with best third-placed qualifiers.
-// The first knockout round is the Round of 32 in 2026.
-const KO_R32_PAIRING = [
-  ['A1','B2'], ['C1','F2'], ['E1','D2'], ['G1','H2'],
-  ['I1','J2'], ['K1','L2'], ['B1','A2'], ['D1','C2'],
-  ['F1','E2'], ['H1','G2'], ['J1','I2'], ['L1','K2'],
-  ['T3_1','T3_8'], ['T3_2','T3_7'], ['T3_3','T3_6'], ['T3_4','T3_5']
+// Fixed Round of 32 match-ups for the knockout tree.
+const KO_R32_MATCHES = [
+  {home:'GER', away:'PRY'},
+  {home:'FRA', away:'SWE'},
+  {home:'RSA', away:'CAN'},
+  {home:'NED', away:'MAR'},
+  {home:'POR', away:'CRO'},
+  {home:'ESP', away:'AUT'},
+  {home:'USA', away:'BIH'},
+  {home:'BEL', away:'SEN'},
+  {home:'BRA', away:'JPN'},
+  {home:'CIV', away:'NOR'},
+  {home:'MEX', away:'ECU'},
+  {home:'ENG', away:'COD'},
+  {home:'ARG', away:'CPV'},
+  {home:'AUS', away:'EGY'},
+  {home:'SUI', away:'ALG'},
+  {home:'COL', away:'GHA'}
 ];
 
-function getQualifier(groupLetter, position){
-  const standings = computeStandings(groupLetter);
-  if(!groupComplete(groupLetter)) return null;
-  return standings[position-1] ? standings[position-1].code : null;
-}
-
-function getBestThirdPlaceQualifiers(){
-  if(!allGroupsComplete()) return [];
-  const thirdPlaces = GROUP_LETTERS.map(group=>{
-    const standings = computeStandings(group);
-    const third = standings[2];
-    return third ? {code: third.code, pts: third.pts, w: third.w} : null;
-  }).filter(Boolean);
-  thirdPlaces.sort((a,b)=> b.pts - a.pts || b.w - a.w || a.code.localeCompare(b.code));
-  return thirdPlaces.slice(0,8).map(item=>item.code);
-}
-
-function resolveQualifier(slot){
-  if(slot.startsWith('T3_')){
-    const idx = parseInt(slot.split('_')[1], 10) - 1;
-    const qualifiers = getBestThirdPlaceQualifiers();
-    return qualifiers[idx] || null;
-  }
-  const group = slot[0];
-  const position = parseInt(slot.slice(1), 10);
-  return getQualifier(group, position);
-}
-
 function getR32Slots(){
-  return KO_R32_PAIRING.map(([h,a])=>({
-    home: resolveQualifier(h),
-    away: resolveQualifier(a)
-  }));
+  return KO_R32_MATCHES.slice();
 }
 
 // Bracket tree: Round of 32 (16) -> Round of 16 (8) -> QF (4) -> SF (2) -> Final (1)
@@ -1317,39 +1317,52 @@ function renderKnockout(){
   const bracket = document.createElement('div');
   bracket.className='bracket';
 
-  rounds.forEach((round, rIdx)=>{
+  function createRoundColumn(label, roundIdx, matches, startIdx = 0, className='round-col'){
     const col = document.createElement('div');
-    col.className='round-col';
+    col.className = className;
     const title = document.createElement('div');
     title.className='round-title';
-    title.textContent = ROUND_LABELS[rIdx];
+    title.textContent = label;
     col.appendChild(title);
-
-    round.forEach((m, mIdx)=>{
-      col.appendChild(renderMatchBox(m, rIdx, mIdx));
+    matches.forEach((m, index)=>{
+      col.appendChild(renderMatchBox(m, roundIdx, startIdx + index));
     });
-    bracket.appendChild(col);
-  });
+    return col;
+  }
 
-  // champion column
-  const champCol = document.createElement('div');
-  champCol.className='champion-col';
+  bracket.appendChild(createRoundColumn('R32', 0, rounds[0].slice(0, 8), 0, 'round-col'));
+  bracket.appendChild(createRoundColumn('R16', 1, rounds[1].slice(0, 4), 0, 'round-col'));
+  bracket.appendChild(createRoundColumn('QF', 2, rounds[2].slice(0, 2), 0, 'round-col'));
+  bracket.appendChild(createRoundColumn('SF', 3, rounds[3].slice(0, 1), 0, 'round-col'));
+
+  const finalCol = document.createElement('div');
+  finalCol.className='final-col';
+  const finalTitle = document.createElement('div');
+  finalTitle.className='round-title';
+  finalTitle.textContent = 'Final';
+  finalCol.appendChild(finalTitle);
+  finalCol.appendChild(renderMatchBox(rounds[4][0], 4, 0));
+
   const finalMatch = rounds[4][0];
+  const championCard = document.createElement('div');
+  championCard.className = 'trophy-card' + (finalMatch.winner ? '' : ' empty');
   if(finalMatch.winner){
     const t = TEAMS[finalMatch.winner];
-    champCol.innerHTML = `<div class="trophy-card">
-      <span class="ticon">🏆</span>
+    championCard.innerHTML = `<span class="ticon">🏆</span>
       <div class="tflag"><img src="${t.flagUrl}" alt="${t.countryName || t.code} flag"></div>
       <div class="tlabel">World Champion</div>
-      <div class="tname">${t.fullName || t.code}</div>
-    </div>`;
-  }else{
-    champCol.innerHTML = `<div class="trophy-card empty">
-      <span class="ticon" style="opacity:0.3;">🏆</span>
-      <div class="tname">Champion<br>TBD</div>
-    </div>`;
+      <div class="tname">${t.fullName || t.code}</div>`;
+  } else {
+    championCard.innerHTML = `<span class="ticon" style="opacity:0.3;">🏆</span>
+      <div class="tname">Champion<br>TBD</div>`;
   }
-  bracket.appendChild(champCol);
+  finalCol.appendChild(championCard);
+  bracket.appendChild(finalCol);
+
+  bracket.appendChild(createRoundColumn('SF', 3, rounds[3].slice(1, 2), 1, 'round-col'));
+  bracket.appendChild(createRoundColumn('QF', 2, rounds[2].slice(2, 4), 2, 'round-col'));
+  bracket.appendChild(createRoundColumn('R16', 1, rounds[1].slice(4, 8), 4, 'round-col'));
+  bracket.appendChild(createRoundColumn('R32', 0, rounds[0].slice(8, 16), 8, 'round-col'));
 
   container.innerHTML='';
   const scrollWrap = document.createElement('div');
