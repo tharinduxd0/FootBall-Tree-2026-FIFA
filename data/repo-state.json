@@ -315,6 +315,10 @@
     "R16_6": "ARG",
     "R16_7": "SUI",
     "QF_0": "FRA",
-    "QF_1": "ESP"
+    "QF_1": "ESP",
+    "QF_2": "ENG",
+    "QF_3": "ARG",
+    "SF_0": "ESP",
+    "SF_1": "ARG"
   }
 }
